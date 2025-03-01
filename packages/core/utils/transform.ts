@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { createHash } from "crypto";
 import { ChatCompletionMessageParam } from "openai/resources/chat/index.mjs";
 import toJsonSchema from "to-json-schema";
+import { createLLMClient, getModelName, isOSeriesModel } from "./llm-client.js";
 
 export async function prepareTransform(
     datastore: DataStore,
@@ -71,17 +72,14 @@ export async function prepareTransform(
 export async function generateMapping(schema: any, payload: any, instruction?: string, retry = 0, messages?: ChatCompletionMessageParam[]): Promise<{jsonata: string, confidence: number, confidence_reasoning: string} | null> {
   console.log("generating mapping" + (retry ? `, attempt ${retry} with temperature ${retry * 0.1}` : ""));
   try {
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      baseURL: process.env.OPENAI_API_BASE_URL,
-    });
-    const userPrompt = 
-`Given a source data and structure, create a jsonata expression in JSON FORMAT.
+    // Use the new LLM client
+    const openai = createLLMClient();
+    const userPrompt = `Given a source data and structure, create a jsonata expression in JSON FORMAT.
 
 Important: The output should be a jsonata expression creating an object that matches the following schema:
 ${JSON.stringify(schema, null, 2)}
 
-${instruction ? `The instruction from the user is: ${instruction}` : ''}
+${instruction ? `The instruction from the user is: ${instruction}` : ""}
 
 ------
 
@@ -97,10 +95,12 @@ ${JSON.stringify(sample(payload, 5), null, 2).slice(0,10000)}`
         {role: "user", content: userPrompt}
       ]
     }
-    const temperature = String(process.env.OPENAI_MODEL).startsWith("o") ? undefined : Math.min(retry * 0.1, 1);
-  
+    // Get the model name and determine if it's an o-series model
+    const modelName = getModelName();
+    const temperature = isOSeriesModel(modelName) ? undefined : Math.min(retry * 0.1, 1);
+
     const reasoning = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL,
+      model: modelName,
       temperature,
       messages,
       response_format: {

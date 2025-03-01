@@ -8,6 +8,7 @@ import { API_PROMPT } from "./prompts.js";
 import { getDocumentation } from "./documentation.js";
 import { decompressData, parseFile } from "./file.js";
 import { createHash } from "crypto";
+import { createLLMClient, getModelName } from "./llm-client.js";
 
 export async function prepareExtract(extractInput: ExtractInput, payload: any, credentials: any, lastError: string | null = null): Promise<ExtractConfig> {
     // Set the current timestamp
@@ -101,12 +102,13 @@ async function generateExtractConfig(extractConfig: Partial<ExtractConfig>, docu
     fileType: z.enum(Object.values(FileType) as [string, ...string[]]).optional(),
   }));
 
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: process.env.OPENAI_API_BASE_URL
-  });
+  // Use the new LLM client
+  const openai = createLLMClient();
+  // Get the model name
+  const modelName = getModelName();
+
   const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL,
+    model: modelName,
     response_format: {
       type: "json_schema",
       json_schema: {

@@ -2,6 +2,7 @@ import { Validator } from "jsonschema";
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { GENERATE_SCHEMA_PROMPT } from "./prompts.js";
+import { createLLMClient, getModelName, isOSeriesModel } from "./llm-client.js";
 
 export async function generateSchema(instruction: string, responseData: string) : Promise<string> {
   const messages: ChatCompletionMessageParam[] = [
@@ -42,21 +43,21 @@ async function attemptSchemaGeneration(
   retry: number
 ): Promise<string> {
   console.log(`Generating schema: ${retry ? `(retry ${retry})` : ""}`);
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: process.env.OPENAI_API_BASE_URL
-  });
-  
-  const modelName = process.env.SCHEMA_GENERATION_MODEL || process.env.OPENAI_MODEL;
-  
+
+  // Use the new LLM client
+  const openai = createLLMClient();
+
+  // Get the model name for schema generation
+  const modelName = getModelName(true); // true indicates schema generation
+
   let temperature = 0;
-  if (modelName === 'gpt-4o' && retry > 0) {
+  if (isOSeriesModel(modelName) && retry > 0) {
     temperature = Math.min(0.3 * retry, 1.0);
     console.log(`Using increased temperature: ${temperature} for retry ${retry}`);
   }
   const completionRequest: any = {
     model: modelName,
-    temperature: modelName.startsWith('gpt-4') ? temperature : undefined,
+    temperature: modelName === 'o3-mini' ? 0 : (modelName.startsWith('gpt-4') ? temperature : undefined),
     response_format: { "type": "json_object" },
     messages: messages
   };
