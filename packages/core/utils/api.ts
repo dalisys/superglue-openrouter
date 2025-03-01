@@ -6,7 +6,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { getDocumentation } from "./documentation.js";
 import { API_ERROR_HANDLING_USER_PROMPT, API_PROMPT } from "./prompts.js";
 import { callAxios, composeUrl, replaceVariables } from "./tools.js";
-
+import { createLLMClient, getModelName, isOSeriesModel } from "./llm-client.js";
 
 export async function prepareEndpoint(
   endpointInput: ApiInput, 
@@ -188,10 +188,9 @@ async function generateApiConfig(
       pageSize: z.number().int().describe("Number of items per page. Set this to a number. In headers or query params, you can access it as {limit}."),
     }).optional()
   }));
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: process.env.OPENAI_API_BASE_URL
-  });
+
+  // Use the new LLM client
+  const openai = createLLMClient();
 
   const userProvidedAdditionalInfo = Boolean(
     apiConfig.headers ||
@@ -247,11 +246,15 @@ Documentation: ${String(documentation).slice(0, 80000)}`
 
   const numInitialMessages = 2;
   const retryCount = previousMessages.length > 0 ? (messages.length - numInitialMessages) / 2 : 0;
-  const temperature = String(process.env.OPENAI_MODEL).startsWith("o") ? undefined : Math.min(retryCount * 0.1, 1);
+  // Get the model name
+  const modelName = getModelName();
+  const temperature = isOSeriesModel(modelName)
+    ? undefined
+    : Math.min(retryCount * 0.1, 1);
   console.log("Generating API config for " + apiConfig.urlHost + (retryCount > 0 ? ` (retry ${retryCount})` : ""));
 
   const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL,
+    model: modelName,
     response_format: {
       type: "json_schema",
       json_schema: {
