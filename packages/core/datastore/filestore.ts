@@ -76,10 +76,34 @@ export class FileStore implements DataStore {
         runs: Object.fromEntries(this.storage.runs),
         runsIndex: Object.fromEntries(this.storage.runsIndex)
       };
+      
       // Use temporary file to ensure atomic writes
       const tempPath = `${this.filePath}.tmp`;
+      
+      // Write to temporary file
       fs.writeFileSync(tempPath, JSON.stringify(serialized, null, 2), { mode: 0o644 });
-      fs.renameSync(tempPath, this.filePath);
+      
+      try {
+        // Try rename first (atomic on most systems)
+        fs.renameSync(tempPath, this.filePath);
+      } catch (renameErr) {
+        if (renameErr.code === 'EPERM' || renameErr.code === 'EACCES' || renameErr.code === 'EBUSY') {
+          // On Windows, we might get permission errors when the file is in use
+          // Fall back to copy and delete approach
+          console.log('Rename failed, falling back to copy approach');
+          fs.copyFileSync(tempPath, this.filePath);
+          
+          try {
+            // Try to remove the temp file, but don't fail if we can't
+            fs.unlinkSync(tempPath);
+          } catch (unlinkErr) {
+            console.warn('Failed to remove temporary file:', unlinkErr.message);
+          }
+        } else {
+          // For other errors, rethrow
+          throw renameErr;
+        }
+      }
     } catch (error) {
       console.error('Failed to persist data:', error);
       throw error;
@@ -325,12 +349,27 @@ export class FileStore implements DataStore {
   }
 
   async clearAll(): Promise<void> {
-    this.storage.apis.clear();
-    this.storage.extracts.clear();
-    this.storage.transforms.clear();
-    this.storage.runs.clear();
-    this.storage.runsIndex.clear();
-    await this.persist();
+    this.storage = {
+      apis: new Map(),
+      extracts: new Map(),
+      transforms: new Map(),
+      runs: new Map(),
+      runsIndex: new Map()
+    };
+    
+    try {
+      await this.persist();
+    } catch (error) {
+      console.warn('Error persisting empty data during clearAll:', error.message);
+      // If persist fails during clearAll, we'll try a more direct approach
+      try {
+        if (fs.existsSync(this.filePath)) {
+          fs.writeFileSync(this.filePath, '{}', { mode: 0o644 });
+        }
+      } catch (directWriteError) {
+        console.error('Failed to clear data file directly:', directWriteError.message);
+      }
+    }
   }
 
   async disconnect(): Promise<void> {
