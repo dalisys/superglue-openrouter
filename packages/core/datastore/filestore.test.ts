@@ -12,11 +12,35 @@ describe('FileStore', () => {
 
   beforeEach(() => {
     // Clean up any existing test data
-    if (fs.existsSync(testPath)) {
-      fs.unlinkSync(testPath);
-    }
-    if (fs.existsSync(testDir)) {
-      fs.rmdirSync(testDir);
+    try {
+      if (fs.existsSync(testPath)) {
+        fs.unlinkSync(testPath);
+      }
+      if (fs.existsSync(testDir)) {
+        try {
+          fs.rmdirSync(testDir);
+        } catch (err) {
+          // On Windows, directory might not be empty - try to remove contents
+          if (err.code === 'ENOTEMPTY' || err.code === 'EPERM') {
+            const files = fs.readdirSync(testDir);
+            files.forEach(file => {
+              try {
+                fs.unlinkSync(path.join(testDir, file));
+              } catch (e) {
+                console.warn(`Could not remove file: ${file}`, e.message);
+              }
+            });
+            // Try rmdir again
+            try {
+              fs.rmdirSync(testDir);
+            } catch (e) {
+              console.warn(`Could not remove directory after clearing: ${testDir}`, e.message);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Error during test cleanup (before test):', err.message);
     }
     store = new FileStore(testDir);
   });
@@ -24,12 +48,43 @@ describe('FileStore', () => {
   afterEach(async () => {
     await store.clearAll();
     await store.disconnect();
+    
     // Clean up test files
-    if (fs.existsSync(testPath)) {
-      fs.unlinkSync(testPath);
-    }
-    if (fs.existsSync(testDir)) {
-      fs.rmdirSync(testDir);
+    try {
+      if (fs.existsSync(testPath)) {
+        fs.unlinkSync(testPath);
+      }
+      // Check for .tmp files too
+      const tmpPath = testPath + '.tmp';
+      if (fs.existsSync(tmpPath)) {
+        fs.unlinkSync(tmpPath);
+      }
+      
+      if (fs.existsSync(testDir)) {
+        try {
+          fs.rmdirSync(testDir);
+        } catch (err) {
+          // On Windows, directory might not be empty - try to remove contents
+          if (err.code === 'ENOTEMPTY' || err.code === 'EPERM') {
+            const files = fs.readdirSync(testDir);
+            files.forEach(file => {
+              try {
+                fs.unlinkSync(path.join(testDir, file));
+              } catch (e) {
+                console.warn(`Could not remove file: ${file}`, e.message);
+              }
+            });
+            // Try rmdir again
+            try {
+              fs.rmdirSync(testDir);
+            } catch (e) {
+              console.warn(`Could not remove directory after clearing: ${testDir}`, e.message);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Error during test cleanup (after test):', err.message);
     }
   });
 
