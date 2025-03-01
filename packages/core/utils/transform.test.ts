@@ -1,32 +1,41 @@
 import { TransformInput } from '@superglue/shared';
 import dotenv from 'dotenv';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Mock the llm-client module first
+vi.mock('./llm-client.js', () => ({
+  createLLMClient: vi.fn(),
+  getModelName: vi.fn().mockReturnValue('gpt-4-turbo'),
+  isOSeriesModel: vi.fn().mockReturnValue(false)
+}));
+
+// Now import the modules that use the mocks
 import { applyJsonataWithValidation } from './tools.js';
 import { generateMapping, prepareTransform } from './transform.js';
+import * as llmClient from './llm-client.js';
 
-// Define mockOpenAI at the top level
-const mockOpenAI = {
-  chat: {
-    completions: {
-      create: vi.fn()
-    }
-  }
-};
-vi.mock('openai', () => ({
-    default: class {
-      constructor() {
-        return mockOpenAI;
-      }
-    }
-  }));          
+const mockedCreateLLMClient = vi.mocked(llmClient.createLLMClient);
 
 describe('transform utils', () => {  
+  // Create chat completions mock within the describe block
+  const mockChatCompletions = {
+    create: vi.fn()
+  };
+  
+  // Create OpenAI mock within the describe block
+  const mockOpenAI = {
+    chat: {
+      completions: mockChatCompletions
+    }
+  } as unknown as import('openai').OpenAI;
+
   beforeEach(() => {
     // Reset all mocks before each test
     vi.clearAllMocks();
     dotenv.config();
-    // Reset the mock implementation
-    mockOpenAI.chat.completions.create.mockReset();
+    
+    // Setup createLLMClient mock for each test
+    mockedCreateLLMClient.mockReturnValue(mockOpenAI);
   });
 
   describe('prepareTransform', () => {
@@ -102,7 +111,7 @@ describe('transform utils', () => {
         let mockDataStore = {
             getTransformConfigFromRequest: vi.fn(),
           } as any;      
-          mockOpenAI.chat.completions.create.mockResolvedValueOnce({
+          mockChatCompletions.create.mockResolvedValueOnce({
             choices: [{
               message: {
                 content: JSON.stringify({
@@ -131,7 +140,8 @@ describe('transform utils', () => {
       // Reset modules to ensure clean mocks
       vi.resetModules();
 
-      mockOpenAI.chat.completions.create.mockReset();
+      // Setup createLLMClient mock again after resetModules
+      mockedCreateLLMClient.mockReturnValue(mockOpenAI);
     });
 
     const sampleSchema = {
@@ -149,7 +159,7 @@ describe('transform utils', () => {
     };
 
     it('should generate mapping successfully', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValueOnce({
+      mockChatCompletions.create.mockResolvedValueOnce({
         choices: [{
           message: {
             content: JSON.stringify({
@@ -175,8 +185,8 @@ describe('transform utils', () => {
 
     it('should retry on failure', async () => {
       let attempts = 0;
-      mockOpenAI.chat.completions.create.mockRejectedValueOnce(attempts++ === 0 ? new Error('API Error') : null);
-      mockOpenAI.chat.completions.create.mockResolvedValueOnce({
+      mockChatCompletions.create.mockRejectedValueOnce(attempts++ === 0 ? new Error('API Error') : null);
+      mockChatCompletions.create.mockResolvedValueOnce({
         choices: [{
           message: {
             content: JSON.stringify({
@@ -193,7 +203,7 @@ describe('transform utils', () => {
     });
 
     it('should return null after max retries', async () => {
-      mockOpenAI.chat.completions.create.mockRejectedValue(new Error('API Error'));
+      mockChatCompletions.create.mockRejectedValue(new Error('API Error'));
 
       const result = await generateMapping(sampleSchema, samplePayload);
       expect(result).toBeNull();

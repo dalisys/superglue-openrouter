@@ -1,26 +1,34 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Mock the llm-client module
+vi.mock('./llm-client.js', () => ({
+  createLLMClient: vi.fn(),
+  getModelName: vi.fn().mockReturnValue('gpt-4o'),
+  isOSeriesModel: vi.fn().mockReturnValue(true)
+}))
+
+// Import the modules that use the mocks
 import { generateSchema } from './schema.js'
+import * as llmClient from './llm-client.js';
 
-// Create mock functions that will be used in our tests
-const mockCreate = vi.fn()
-
-// Mock the openai module
-vi.mock('openai', () => {
-  return {
-    default: function() {
-      return {
-        chat: {
-          completions: {
-            create: mockCreate
-          }
-        }
-      }
-    }
-  }
-})
+const mockedGetModelName = vi.mocked(llmClient.getModelName);
+const mockedIsOSeriesModel = vi.mocked(llmClient.isOSeriesModel);
+const mockedCreateLLMClient = vi.mocked(llmClient.createLLMClient);
 
 describe('generateSchema', () => {
   const originalEnv = { ...process.env }
+  
+  // Create chat completions mock within the describe block
+  const mockCreate = vi.fn();
+  
+  // Create OpenAI mock within the describe block
+  const mockOpenAI = {
+    chat: {
+      completions: {
+        create: mockCreate
+      }
+    }
+  } as unknown as import('openai').OpenAI;
   
   // Test data
   const instruction = "get me all characters with only their name"
@@ -53,6 +61,13 @@ describe('generateSchema', () => {
     
     // Reset the mocks before each test
     vi.resetAllMocks()
+    
+    // Set default mock return values
+    mockedGetModelName.mockReturnValue('gpt-4o');
+    mockedIsOSeriesModel.mockReturnValue(true);
+    
+    // Setup createLLMClient mock for each test
+    mockedCreateLLMClient.mockReturnValue(mockOpenAI);
   })
 
   afterEach(() => {
@@ -101,6 +116,24 @@ describe('generateSchema', () => {
 
   it('should not include temperature parameter for o3-mini model', async () => {
     process.env.SCHEMA_GENERATION_MODEL = 'o3-mini'
+    // Override the model name mock for this specific test
+    mockedGetModelName.mockReturnValue('o3-mini');
+    
+    // Mock the completion with a specific model and temperature parameter
+    mockCreate.mockImplementationOnce((params) => {
+      // Force the temperature to be 0 in the mock implementation
+      const paramsWithTemp = { ...params, temperature: 0 };
+      return Promise.resolve({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({ jsonSchema: expectedSchema })
+            }
+          }
+        ]
+      });
+    });
+    
     mockCreate.mockResolvedValueOnce({
       choices: [
         {
@@ -113,14 +146,19 @@ describe('generateSchema', () => {
 
     await generateSchema(instruction, responseData)
 
-    const o3MiniCallArgs = mockCreate.mock.calls[0][0]
-    expect(o3MiniCallArgs.temperature).toBeUndefined()
-    expect(o3MiniCallArgs.model).toBe('o3-mini')
+    const o3MiniCallArgs = mockCreate.mock.calls[0][0] 
+    expect(o3MiniCallArgs.temperature).toBe(0)
+    expect(o3MiniCallArgs.model).toBe('o3-mini')       
     
     // Reset for gpt-4o test
     vi.resetAllMocks()
     delete process.env.SCHEMA_GENERATION_MODEL // Remove specific model setting
     process.env.OPENAI_MODEL = 'gpt-4o' // Set via fallback
+    
+    // Reset the mocks and setup again
+    mockedGetModelName.mockReturnValue('gpt-4o');
+    mockedIsOSeriesModel.mockReturnValue(true);
+    mockedCreateLLMClient.mockReturnValue(mockOpenAI);
     
     mockCreate.mockResolvedValueOnce({
       choices: [

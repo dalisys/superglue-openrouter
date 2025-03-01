@@ -1,15 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { prepareExtract, callExtract, processFile, Queue } from './extract.js';
-import { callAxios } from './tools.js';
-import { getDocumentation } from './documentation.js';
-import { decompressData, parseFile } from './file.js';
 import { HttpMethod, DecompressionMethod, FileType, AuthType } from '@superglue/shared';
-import OpenAI from 'openai';
 
-// Mock dependencies
+// Mock dependencies first
 vi.mock('./documentation.js');
 vi.mock('./file.js');
-vi.mock('openai');
+vi.mock('./llm-client.js', () => ({
+  createLLMClient: vi.fn(),
+  getModelName: vi.fn().mockReturnValue('test-model'),
+  isOSeriesModel: vi.fn().mockReturnValue(false)
+}));
 
 vi.mock('./tools.js', async () => {
   const actual = await vi.importActual('./tools.js');
@@ -19,9 +18,35 @@ vi.mock('./tools.js', async () => {
   };
 });
 
+// Import files that depend on mocks
+import { prepareExtract, callExtract, processFile, Queue } from './extract.js';
+import { callAxios } from './tools.js';
+import { getDocumentation } from './documentation.js';
+import { decompressData, parseFile } from './file.js';
+import * as llmClient from './llm-client.js';
+
+const mockedGetModelName = vi.mocked(llmClient.getModelName);
+const mockedIsOSeriesModel = vi.mocked(llmClient.isOSeriesModel);
+const mockedCreateLLMClient = vi.mocked(llmClient.createLLMClient);
+
 describe('Extract Utils', () => {
+  // Create chat completions mock within the describe block
+  const mockChatCompletions = {
+    create: vi.fn()
+  };
+  
+  // Create OpenAI mock within the describe block
+  const mockOpenAI = {
+    chat: {
+      completions: mockChatCompletions
+    }
+  } as unknown as import('openai').OpenAI;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    
+    // Setup createLLMClient mock for each test
+    mockedCreateLLMClient.mockReturnValue(mockOpenAI);
   });
 
   afterEach(() => {
@@ -34,7 +59,7 @@ describe('Extract Utils', () => {
       (getDocumentation as any).mockResolvedValue(mockDocumentation);
       
       // Mock OpenAI response
-      const mockOpenAIResponse = {
+      mockChatCompletions.create.mockResolvedValue({
         choices: [{
           message: {
             content: JSON.stringify({
@@ -44,15 +69,7 @@ describe('Extract Utils', () => {
             })
           }
         }]
-      };
-      // Update OpenAI mock to match new client structure
-      (OpenAI as any).mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: vi.fn().mockResolvedValue(mockOpenAIResponse)
-          }
-        }
-      }));
+      });
 
       const extractInput = {
         documentationUrl: 'https://docs.example.com',
