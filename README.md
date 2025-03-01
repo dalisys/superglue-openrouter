@@ -209,3 +209,54 @@ superglue is GPL licensed. The superglue client SDKs are MIT licensed. See [LICE
 
 [![Twitter](https://img.shields.io/twitter/follow/superglue_d?style=social)](https://twitter.com/superglue_d)
 
+## Using OpenRouter with Superglue
+
+Superglue now supports using [OpenRouter](https://openrouter.ai/) as an alternative to OpenAI for all LLM operations. This allows you to access hundreds of AI models through a single unified API.
+
+### Configuration
+
+To use OpenRouter, add the following environment variables to your `.env` file:
+
+```
+# Set to true to use OpenRouter instead of OpenAI
+USE_OPENROUTER=true
+
+# Your OpenRouter API key (get one at https://openrouter.ai/keys)
+OPENROUTER_API_KEY=sk-or-your-key-here
+
+# OpenRouter base URL (usually you don't need to change this)
+OPENROUTER_API_BASE_URL=https://openrouter.ai/api/v1
+
+# OpenRouter model to use (e.g., 'anthropic/claude-3.5-sonnet', 'openai/gpt-4o', etc.)
+OPENROUTER_MODEL=openai/gpt-4o
+
+# OpenRouter model for schema generation (can be the same as OPENROUTER_MODEL or a faster model)
+OPENROUTER_SCHEMA_MODEL=openai/gpt-4o
+```
+
+### Available Models
+
+OpenRouter provides access to a wide range of models from various providers including OpenAI, Anthropic, Google, Mistral, and more. You can view the full list of available models on the [OpenRouter Models page](https://openrouter.ai/models).
+
+Popular models include:
+
+- `openai/gpt-4o` - OpenAI's GPT-4o
+- `anthropic/claude-3.5-sonnet` - Anthropic's Claude 3.5 Sonnet
+- `google/gemini-1.5-pro` - Google's Gemini 1.5 Pro
+- `mistral/mixtral-8x7b` - Mistral's Mixtral 8x7B
+
+### Benefits of Using OpenRouter
+
+1. **Access to multiple models** - Use the best model for your specific use case
+2. **Fallback routing** - Automatically retry with alternative models if your primary choice fails
+3. **Cost management** - Compare pricing across providers
+4. **Unified API** - No need to change your code to switch between models
+
+### Switching Between OpenAI and OpenRouter
+
+You can easily switch between OpenAI and OpenRouter by changing the `USE_OPENROUTER` environment variable:
+
+- Set `USE_OPENROUTER=true` to use OpenRouter
+- Set `USE_OPENROUTER=false` to use OpenAI directly
+
+This allows you to switch providers without any code changes.
