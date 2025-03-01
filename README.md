@@ -1,7 +1,8 @@
-
 <p align="center">
   <img src="https://github.com/user-attachments/assets/be0e65d4-dcd8-4133-9841-b08799e087e7" width="350" alt="superglue_logo_white">
 </p>
+
+> **Note:** This repository is a fork of [superglue](https://github.com/superglue-ai/superglue) that integrates OpenRouter support. Full credit goes to the original creators at [superglue-ai](https://github.com/superglue-ai) for their amazing work.
 
 <h2 align="center">self-healing open source data connector 🍯</h2>
 
@@ -29,7 +30,7 @@ Here's how it works: You define your desired data schema and provide basic instr
 
 </div>
 
-If you’re spending a lot of time writing code connecting to weird APIs, fumbling with custom fields in foreign language ERPs, mapping JSONs, extracting data from compressed CSVs sitting on FTP servers, and making sure your integrations don’t break when something unexpected comes through, superglue might be for you.
+If you're spending a lot of time writing code connecting to weird APIs, fumbling with custom fields in foreign language ERPs, mapping JSONs, extracting data from compressed CSVs sitting on FTP servers, and making sure your integrations don't break when something unexpected comes through, superglue might be for you.
 
 ```mermaid
 flowchart LR
